@@ -151,4 +151,42 @@ public class BackupController {
                     .body("La restauración fue interrumpida debido a una señal del sistema.");
         }
     }
+
+
+    @Operation(summary = "Crear backup para Nueva Sucursal (Smart Dump)",
+            description =
+                    """
+                        Genera un archivo .dump manipulado mediante una transacción aislada (Snapshot).\s
+                        En el archivo resultante: 1) Todos los productos tendrán Stock = 0.\s
+                        2) Se eliminan todos los usuarios excepto el que tenga rol SUPER_ADMIN.\s
+                        "NOTA: La base de datos original NO sufre modificaciones, es un proceso seguro."
+                    """)
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Backup de sucursal creado exitosamente",
+                    content = @Content(mediaType = "text/plain",
+                            examples = @ExampleObject(value = "Backup de inventario creado correctamente: decoaromas_inventario_2025-01-07_10-00.dump"))),
+            @ApiResponse(responseCode = "500", description = "Error interno (SQL o pg_dump)",
+                    content = @Content(mediaType = "text/plain",
+                            examples = @ExampleObject(value = "Error crítico al generar backup de sucursal: Error en pg_dump..."))),
+            @ApiResponse(responseCode = "503", description = "Operación interrumpida",
+                    content = @Content(mediaType = "text/plain"))
+    })
+    @PostMapping("/create-smart-inventario")
+    @PreAuthorize(IS_SUPER_ADMIN)
+    public ResponseEntity<String> createSmartDemoBackup() {
+        try {
+            String result = backupService.createSmartDemoBackup1();
+            return ResponseEntity.ok(result);
+        } catch (InterruptedException e) {
+            // Manejo específico para interrupción de hilos
+            Thread.currentThread().interrupt();
+            return ResponseEntity
+                    .status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body("La operación de backup fue interrumpida.");
+        } catch (Exception e) {
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error crítico al generar backup de inventario: " + e.getMessage());
+        }
+    }
 }

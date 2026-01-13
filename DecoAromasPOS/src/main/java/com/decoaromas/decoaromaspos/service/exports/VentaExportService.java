@@ -40,7 +40,7 @@ public class VentaExportService {
         String[] headers = {
                 "ID Venta", "Fecha", "Tipo", "Cliente", "RUT", "Ciudad", "Tipo Doc", "Nro Doc",
                 "Producto", "SKU", "Cant", "Precio Unit",
-                "Pago Método", "Pago Monto", "Vuelto", "Total Venta"
+                "Pago Método", "Pago Monto", "Vuelto", "Total Venta", "Costo", "Utilidad"
         };
         CSVFormat format = CSVFormat.DEFAULT.builder()
                 .setHeader(headers)
@@ -57,6 +57,8 @@ public class VentaExportService {
 
                 // Determinamos cuántas filas ocupará esta venta (el máximo entre productos y pagos)
                 int filasVenta = Math.max(detalles.size(), pagos.size());
+                // Aseguramos que al menos haya 1 fila aunque no haya detalles/pagos (caso borde)
+                filasVenta = Math.max(filasVenta, 1);
 
                 for (int i = 0; i < filasVenta; i++) {
                     boolean esPrimeraFila = (i == 0);
@@ -64,6 +66,7 @@ public class VentaExportService {
                     // Datos de Cabecera (Solo en la primera fila)
                     String fecha = esPrimeraFila ? fechaStr : "";
                     String totalVenta = esPrimeraFila ? String.valueOf(v.getTotalNeto()) : "";
+                    String costoGeneral = esPrimeraFila ? String.valueOf(v.getCostoGeneral()) : "";
                     String vuelto = esPrimeraFila ? String.valueOf(v.getVuelto()) : "";
                     String tDoc = esPrimeraFila ? String.valueOf(v.getTipoDocumento()) : "";
                     String tVenta = esPrimeraFila ? String.valueOf(v.getTipoCliente()) : "";
@@ -91,11 +94,18 @@ public class VentaExportService {
                     String pagoMetodo = (i < pagos.size()) ? pagos.get(i).getMedioPago().toString() : "";
                     String pagoMonto = (i < pagos.size()) ? String.valueOf(pagos.get(i).getMonto()) : "";
 
+                    String util = "";
+                    if (esPrimeraFila) {
+                        double totalNeto = (v.getTotalNeto() != null) ? v.getTotalNeto() : 0.0;
+                        double costo = (v.getCostoGeneral() != null) ? v.getCostoGeneral() : 0.0;
+                        util = String.valueOf(totalNeto - costo);
+                    }
+
                     csvPrinter.printRecord(
                             v.getVentaId(),
                             fecha, tVenta, cliente, rut, ciudad, tDoc, nDoc,
                             prodNom, prodSku, prodCant, prodPrec,
-                            pagoMetodo, pagoMonto, vuelto, totalVenta
+                            pagoMetodo, pagoMonto, vuelto, totalVenta, costoGeneral, util
                     );
                 }
             }

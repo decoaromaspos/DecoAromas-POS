@@ -6,12 +6,20 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import javax.sql.DataSource;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
+
 import static org.assertj.core.api.Assertions.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -20,36 +28,63 @@ class BackUpServiceTest {
     @InjectMocks
     private BackupService backupService;
 
+    // Mocks necesarios porque el nuevo BackupService usa base de datos
+    @Mock
+    private DataSource dataSource;
+
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+
+    // Ruta temporal segura para Windows
+    private Path tempBackupDir;
+
     @BeforeEach
     void setup() throws Exception {
-        backupService = new BackupService();
+        // 1. Configurar ruta temporal para Windows (Ej: C:\Users\User\AppData\Local\Temp\decoaromas_test)
+        String tempDir = System.getProperty("java.io.tmpdir");
+        tempBackupDir = Paths.get(tempDir, "decoaromas_test");
 
-        // Inyectar valores manualmente (inventados)
+        // Crear el directorio si no existe
+        if (!Files.exists(tempBackupDir)) {
+            Files.createDirectories(tempBackupDir);
+        }
+
+        // 2. Inyectar valores de configuración (Strings)
         setField("dbHost", "localhost");
         setField("dbPort", "5432");
         setField("dbUser", "postgres");
         setField("dbName", "fake_db");
         setField("dbPassword", "fake_pass");
 
-        Files.createDirectories(Path.of("/app/backups"));
+        Path hardcodedWindowsPath = Paths.get("C:", "Backups", "decoaromas");
+        if (!Files.exists(hardcodedWindowsPath)) {
+            Files.createDirectories(hardcodedWindowsPath);
+        }
+
     }
 
     @AfterEach
-    void cleanup() throws Exception {
-        Path dir = Path.of("/app/backups");
-        if (Files.exists(dir)) {
-            try (var stream = Files.list(dir)) {
-                stream.forEach(p -> {
-                    try { Files.deleteIfExists(p); } catch (Exception ignored) {}
-                });
+    void cleanup() throws IOException {
+        // Limpieza recursiva del directorio temporal creado en Windows
+        if (Files.exists(tempBackupDir)) {
+            try (Stream<Path> walk = Files.walk(tempBackupDir)) {
+                walk.sorted(Comparator.reverseOrder())
+                        .forEach(path -> {
+                            try {
+                                Files.delete(path);
+                            } catch (IOException e) {
+                                // Ignorar errores de borrado en test cleanup
+                            }
+                        });
             }
         }
     }
 
-    private void setField(String field, String value) throws Exception {
-        Field f = BackupService.class.getDeclaredField(field);
-        f.setAccessible(true);
-        f.set(backupService, value);
+    // Método auxiliar para inyectar campos privados
+    private void setField(String fieldName, Object value) throws Exception {
+        Field field = BackupService.class.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(backupService, value);
     }
 
     @Test

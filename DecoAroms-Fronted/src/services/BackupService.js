@@ -33,6 +33,22 @@ export const createBackup = async () => {
 };
 
 /**
+ * Llama al backend para iniciar el proceso de pg_dump
+ * y crear un nuevo archivo de backup solo con el inventario de productos.
+ * Donde todos los productos tienen stock 0, y solo existe el usuario super admin.
+ * @returns {Promise<string>} Mensaje de éxito.
+ */
+export const createBackupInventario = async () => {
+    try {
+        const response = await httpClient.post(`${URL_BACKUPS}/create-smart-inventario`);
+        return response.data; // Mensaje de éxito
+    } catch (error) {
+        console.error('Error al crear el backup:', error);
+        throw error;
+    }
+};
+
+/**
  * Llama al backend para restaurar la base de datos usando un archivo de backup
  * previamente seleccionado por el usuario.
  * @param {string} filename Nombre del archivo .dump a restaurar.
@@ -55,6 +71,7 @@ const backupService = {
     listBackups,
     createBackup,
     restoreBackup,
+    createBackupInventario
 };
 
 export default backupService;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { TrendingUp, Printer, User, Save, Database, DownloadCloud, UploadCloud, PlayCircle } from 'feather-icons-react';
+import { TrendingUp, Printer, User, Save, Database, DownloadCloud, UploadCloud, PlayCircle, Package } from 'feather-icons-react';
 import configuracionService from '../../services/configuracionService';
 import backupService from '../../services/BackupService';
 import { all_routes } from "../../Router/all_routes";
@@ -34,6 +34,7 @@ const Configuracion = () => {
     const [backupList, setBackupList] = useState([]); // Lista de nombres de archivos disponibles
     const [selectedBackup, setSelectedBackup] = useState(null); // Archivo seleccionado para restaurar
     const [isBackingUp, setIsBackingUp] = useState(false); // Estado para la creación de backup
+    const [isBackingUpInventory, setIsBackingUpInventory] = useState(false); // NUEVO ESTADO
     const [isRestoring, setIsRestoring] = useState(false); // Estado para la restauración
 
     // useEffect para cargar los datos iniciales y la lista de backups
@@ -65,7 +66,7 @@ const Configuracion = () => {
                     setIpImpresora(ip);
                 }
 
-                // 2. CARGA CONDICIONAL Y AISLADA DE BACKUPS
+                // Lógica de inicialización de Backups (MANTENIDA)
                 if (esSuperAdmin) {
                     try {
                         const backups = await backupService.listBackups();
@@ -174,14 +175,14 @@ const Configuracion = () => {
         }
     };
 
-    // Manejador para restaurar la base de datos
+    // Manejador para Generar Backup Completo
     const handleGenerarBackup = async () => {
         const confirmacion = await mySwal.fire({
-            title: 'Confirmar Generación de Backup',
-            text: '¿Deseas iniciar la creación de un nuevo archivo de respaldo de la base de datos?',
+            title: 'Confirmar Backup Completo',
+            text: '¿Deseas generar un respaldo completo de TODO el sistema?',
             icon: 'question',
             showCancelButton: true,
-            confirmButtonColor: '#3085d6',
+            confirmButtonColor: '#198754', // Verde bootstrap
             cancelButtonColor: '#d33',
             confirmButtonText: 'Sí, generar backup',
             cancelButtonText: 'Cancelar',
@@ -214,6 +215,58 @@ const Configuracion = () => {
             mySwal.fire('Error', 'No se pudo generar el backup: ' + mensajeError, 'error');
         } finally {
             setIsBackingUp(false);
+        }
+    };
+
+    // NUEVO: Manejador para Generar Backup de Inventario (Sucursal)
+    const handleGenerarBackupInventario = async () => {
+        const confirmacion = await mySwal.fire({
+            title: 'Generar Backup de Inventario',
+            html: `
+                <p>Esta acción generará un archivo Dump optimizado para sucursales nuevas.</p>
+                <ul style="text-align: left; margin-top: 10px;">
+                    <li><strong>Solo incluye:</strong> Productos, Aromas y Familias.</li>
+                    <li><strong>Stock:</strong> Se establecerá en 0 para todos los productos.</li>
+                    <li><strong>Usuarios:</strong> Solo se conservará el SUPER_ADMIN.</li>
+                    <li><strong>Ventas/Datos:</strong> Serán eliminados.</li>
+                </ul>
+                <p>¿Deseas continuar?</p>
+            `,
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonColor: '#0dcaf0', // Cyan bootstrap
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Sí, exportar inventario',
+            cancelButtonText: 'Cancelar',
+        });
+
+        if (!confirmacion.isConfirmed) return;
+
+        setIsBackingUpInventory(true);
+        try {
+            // Asumimos que este método existe en tu servicio como indicaste
+            const result = await backupService.createBackupInventario();
+            mySwal.fire({
+                title: '¡Inventario Exportado!',
+                text: result,
+                icon: 'success',
+                timer: 3000,
+                showConfirmButton: false
+            });
+
+            // Actualizamos la lista para que aparezca disponible para descarga o restauración si se desea
+            const updatedBackups = await backupService.listBackups();
+            const options = updatedBackups.map(name => ({
+                value: name,
+                label: `${name.replace('decoaromas_', '').replace('.dump', '')} (Formato Custom)`
+            }));
+            setBackupList(options);
+
+        } catch (error) {
+            const mensajeError = error.response?.data || error.message || 'Error desconocido al crear el backup de inventario.';
+            mySwal.fire('Error', 'No se pudo generar el backup de inventario: ' + mensajeError, 'error');
+        } finally {
+            setIsBackingUpInventory(false);
         }
     };
 
@@ -367,11 +420,10 @@ const Configuracion = () => {
                                     <div className="d-flex align-items-start mb-3">
                                         <DownloadCloud className="me-3 text-success" size={40} />
                                         <div>
-                                            <h5 className="card-title">Generar Backup Instantáneo</h5>
+                                            <h5 className="card-title">Generar Backup Completo</h5>
                                             <p className="card-text text-muted">
-                                                Crea un archivo de respaldo de la base de datos actual en el servidor.
+                                                Crea un respaldo de <strong>toda</strong> la base de datos (ventas, usuarios, stock actual).
                                             </p>
-                                            <p className="card-text text-muted mb-2">La base de datos quedará guardada en la siguiente ubicación del servidor:</p>
                                             <div className="alert alert-info p-2 mb-3" role="alert" style={{ fontSize: '0.95rem' }}>
                                                 <div className="small mb-0">
                                                     <code>C:\Backups\decoaromas</code>
@@ -382,10 +434,41 @@ const Configuracion = () => {
                                     <button
                                         onClick={handleGenerarBackup}
                                         className="btn btn-success mt-auto"
-                                        disabled={isBackingUp || isSaving || isRestoring}
+                                        disabled={isBackingUp || isSaving || isRestoring || isBackingUpInventory}
                                     >
                                         <PlayCircle size={16} className="me-2" />
-                                        {isBackingUp ? 'Creando Backup...' : 'Generar Backup Ahora'}
+                                        {isBackingUp ? 'Creando Backup...' : 'Generar Backup Completo'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* NUEVO: Generar Backup INVENTARIO (Solo Productos) */}
+                    {esSuperAdminOrAdmin && (
+                        <div className="col-lg-6 col-md-12 mb-4">
+                            <div className="card h-100 border-info">
+                                <div className="card-body d-flex flex-column">
+                                    <div className="d-flex align-items-start mb-3">
+                                        <Package className="me-3 text-info" size={40} />
+                                        <div>
+                                            <h5 className="card-title">Exportar Inventario (Sucursal)</h5>
+                                            <p className="card-text text-muted">
+                                                Genera un backup especial <strong>SOLO</strong> con productos, familias y aromas.
+                                            </p>
+                                            <p className="card-text small text-danger mb-2">
+                                                * El stock de todos los productos será 0.<br />
+                                                * No incluye ventas ni usuarios (excepto SuperAdmin).
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={handleGenerarBackupInventario}
+                                        className="btn btn-info mt-auto text-white"
+                                        disabled={isBackingUp || isSaving || isRestoring || isBackingUpInventory}
+                                    >
+                                        <PlayCircle size={16} className="me-2" />
+                                        {isBackingUpInventory ? 'Exportando Inventario...' : 'Generar Backup Inventario'}
                                     </button>
                                 </div>
                             </div>
@@ -409,7 +492,6 @@ const Configuracion = () => {
                                     </div>
                                     <div className="form-group mb-3 flex-grow-1">
                                         <label>Seleccionar Archivo de Respaldo (.dump)</label>
-                                        {/* Componente Select para elegir el archivo */}
                                         <Select
                                             options={backupList}
                                             value={selectedBackup}
@@ -438,7 +520,7 @@ const Configuracion = () => {
                     {/* Tarjeta para Perfil de Usuario */}
                     {esUsuarioNoSuperAdmin && (
                         <div className="col-lg-6 col-md-12 mb-4">
-                            <div className="card  h-100">
+                            <div className="card h-100">
                                 <div className="card-body">
                                     <div className="d-flex align-items-start mb-3">
                                         <User className="me-3 text-success" size={40} />
